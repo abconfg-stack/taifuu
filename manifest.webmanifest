@@ -1,0 +1,11 @@
+{
+  "name": "台風モデル比較",
+  "short_name": "台風モデル比較",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0c1016",
+  "theme_color": "#0c1016",
+  "icons": [
+    { "src": "icon.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" }
+  ]
+}

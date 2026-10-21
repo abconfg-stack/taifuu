@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>台風モデル比較</title>
+<meta name="theme-color" content="#0c1016">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="台風モデル比較">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="app" hidden>
+  <!-- ヘッダー -->
+  <header class="header">
+    <div class="title-row">
+      <button id="typhoon-pick" class="title-btn">
+        <span id="typhoon-name" class="title">—</span>
+        <span id="typhoon-kana" class="kana"></span>
+        <span id="data-badge" class="badge">—</span>
+        <span id="pick-chevron" class="chevron" hidden>▾</span>
+      </button>
+      <button id="about-btn" class="icon-btn" aria-label="このアプリについて">ⓘ</button>
+    </div>
+    <div id="observation" class="observation">—</div>
+    <div class="time-row">
+      <div class="time-item"><span>現在時刻</span><b id="now-time">--:--:--</b></div>
+      <i class="divider"></i>
+      <div class="time-item"><span>初期時刻</span><b id="initial-time">—</b></div>
+      <i class="divider"></i>
+      <div class="time-item"><span>データ更新</span><b id="updated-time">--:--</b></div>
+      <button id="refresh-btn" class="refresh" aria-label="データを取り直す">↻</button>
+    </div>
+  </header>
+
+  <!-- 但し書き -->
+  <div class="strip caution">
+    各機関の数値予報モデルの気圧から進路を推定した比較表示です。気象庁の公式予報ではありません。
+  </div>
+  <div id="notice" class="strip notice" hidden></div>
+
+  <!-- 地図 -->
+  <div class="map-wrap">
+    <div id="map"></div>
+    <div id="time-chip" class="chip">
+      <b id="chip-lead">現在</b>
+      <span id="chip-time"></span>
+    </div>
+    <button id="fit-btn" class="map-btn" aria-label="地図の範囲を戻す">⌖</button>
+
+    <!-- 操作部（地図の下端に重ねる） -->
+    <div class="controls">
+      <div id="tracking" class="tracking" hidden>
+        <span class="spinner"></span>
+        <div>
+          <b>5モデルの中心を追跡しています</b>
+          <small id="tracking-detail">実況は表示済みです</small>
+        </div>
+      </div>
+      <div id="control-body">
+        <div class="slider-head">
+          <span>予報時間</span>
+          <b id="lead-label">現在</b>
+          <button id="play-btn" class="play">▶ 再生</button>
+        </div>
+        <input id="slider" type="range" min="0" max="120" step="1" value="0">
+        <div id="ticks" class="ticks"></div>
+        <div id="chips" class="chips"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 分析パネル -->
+  <button id="handle" class="handle">
+    <i class="grabber"></i>
+    <span id="handle-label">パネルを畳む</span>
+  </button>
+  <div id="panel" class="panel">
+    <section class="card" id="agreement-card">
+      <div class="agree-top">
+        <div class="agree-title"><span>モデル一致度</span><small id="agree-lead">現在</small></div>
+        <div class="agree-value"><b id="agree-percent">—</b><span>%</span></div>
+        <div class="agree-right">
+          <b id="agree-label">—</b>
+          <small id="agree-spread"></small>
+        </div>
+      </div>
+      <div class="bar"><i id="agree-bar"></i></div>
+      <p class="note" id="agree-note">※ 到達確率ではありません。モデルの予測位置のばらつきを表す指標です。</p>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><span>中心気圧</span><small id="pressure-lead">現在</small></div>
+      <div id="pressure-cells" class="cells"></div>
+      <div id="pressure-chart" class="chart"></div>
+      <p class="note">※ 全球モデルは格子が粗いため、中心気圧は実況より浅く出ることがあります。</p>
+    </section>
+  </div>
+</div>
+
+<!-- 読み込み中 / 失敗 -->
+<div id="splash" class="splash">
+  <div class="spinner big"></div>
+  <p id="splash-text">データを読み込んでいます</p>
+  <button id="retry-btn" class="retry" hidden>もう一度読み込む</button>
+</div>
+
+<!-- このアプリについて -->
+<div id="about" class="sheet" hidden>
+  <div class="sheet-head">
+    <b>アプリについて</b>
+    <button id="about-close" class="close">閉じる</button>
+  </div>
+  <div class="sheet-body">
+    <section class="card">
+      <h3>このアプリについて</h3>
+      <p>本アプリは各気象機関が公開する数値予報モデルのデータを比較・可視化するものであり、独自の気象予報を提供するものではありません。</p>
+      <p class="sub">表示している進路や中心気圧は、各機関のモデルが計算した結果です。気象庁が発表する公式の台風予報とは別のものとして扱ってください。</p>
+    </section>
+    <section class="card">
+      <h3>データの出どころ</h3>
+      <p class="sub">台風の実況（現在位置・中心気圧・進行方向）は気象庁が公開している台風情報から取得しています。</p>
+      <p class="sub">各モデルの進路は、Open-Meteo が配信する各モデルの海面気圧から、本アプリが気圧の谷を追って推定したものです。各気象機関が公表した公式のモデル進路ではありません。</p>
+      <p class="sub">台風が衰えて気圧の谷がはっきりしなくなると、その時点で追跡を終了します。モデルによって進路の長さが違うのはそのためです。</p>
+    </section>
+    <section class="card">
+      <h3>出典</h3>
+      <p class="sub">気象庁（<a href="https://www.jma.go.jp/" target="_blank" rel="noopener">jma.go.jp</a>）／ Open-Meteo（<a href="https://open-meteo.com/" target="_blank" rel="noopener">open-meteo.com</a>, CC BY 4.0）／ 地図は OpenStreetMap 貢献者・CARTO</p>
+    </section>
+    <section class="card">
+      <h3>気象庁の公式情報</h3>
+      <p class="sub">避難などの判断には、必ず気象庁が発表する公式の台風情報・警報をご確認ください。</p>
+      <a class="link-btn" href="https://www.jma.go.jp/bosai/map.html#contents=typhoon" target="_blank" rel="noopener">気象庁の台風情報を開く</a>
+    </section>
+    <section class="card">
+      <h3 id="models-head">対応している数値予報モデル</h3>
+      <div id="model-list"></div>
+    </section>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script src="app.js"></script>
+<script src="ui.js"></script>
+</body>
+</html>

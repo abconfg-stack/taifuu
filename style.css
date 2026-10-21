@@ -1,0 +1,297 @@
+/* 台風モデル比較 — 見た目の基準
+   気象データを読むための道具らしく、落ち着いた面に数字を置く。
+   明暗の両方を用意して、端末の設定に合わせて切り替える。 */
+
+:root {
+  --bg: #0c1016;
+  --panel: #161b23;
+  --raised: #1f252f;
+  --border: rgba(255,255,255,.09);
+  --text: #f5f5f5;
+  --text2: #a1a1a1;
+  --text3: #737373;
+  --accent: #35c8e8;
+  --accent-ink: #0c1016;
+  --observation: #ffe05a;
+  --caution: #ffb359;
+  --good: #5cdb8c;
+  --bad: #ff7370;
+  --ecmwf: #ff7350; --gfs: #40c7f2; --gsm: #ffcc40; --icon: #5cdb8c; --gem: #ba8cff;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f1f4f7;
+    --panel: #ffffff;
+    --raised: #e9edf1;
+    --border: rgba(18,26,36,.14);
+    --text: #141a21;
+    --text2: #515a66;
+    --text3: #7a8490;
+    --accent: #087090;
+    --accent-ink: #ffffff;
+    --observation: #b47b05;
+    --caution: #c66008;
+    --good: #10823f;
+    --bad: #c03024;
+    --ecmwf: #d63813; --gfs: #0968a9; --gsm: #a97300; --icon: #108140; --gem: #6b35bb;
+  }
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+/* hidden 属性は display 指定に負けるので、ここで優先させる */
+[hidden] { display: none !important; }
+
+html, body {
+  margin: 0; height: 100%; overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+  overscroll-behavior: none;
+}
+
+#app { display: flex; flex-direction: column; height: 100%; }
+
+/* ── ヘッダー ───────────────────────────── */
+
+.header { padding: calc(var(--safe-top) + 6px) 14px 8px; flex: none; }
+
+.title-row { display: flex; align-items: center; gap: 8px; }
+
+.title-btn {
+  display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0;
+  background: none; border: 0; padding: 6px 0; margin: 0; color: inherit;
+  font: inherit; text-align: left; cursor: pointer;
+}
+.title { font-size: 19px; font-weight: 700; white-space: nowrap; }
+.kana { font-size: 11px; font-weight: 600; color: var(--text2); white-space: nowrap; }
+.chevron { font-size: 11px; color: var(--text3); }
+
+.badge {
+  font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 99px;
+  background: var(--accent); color: var(--accent-ink); white-space: nowrap;
+}
+.badge.warn { background: var(--caution); }
+
+.icon-btn {
+  width: 44px; height: 44px; flex: none; border: 0; background: none;
+  color: var(--text2); font-size: 19px; cursor: pointer;
+}
+
+.observation {
+  font-size: 11px; font-weight: 500; color: var(--text2);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; margin-top: 2px;
+}
+
+.time-row { display: flex; align-items: center; gap: 10px; margin-top: 7px; }
+.time-item { display: flex; flex-direction: column; gap: 1px; }
+.time-item span { font-size: 9px; font-weight: 600; color: var(--text3); }
+.time-item b { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.divider { width: 1px; height: 20px; background: var(--border); }
+
+.refresh {
+  margin-left: auto; width: 38px; height: 34px; border-radius: 99px; cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent); font-size: 15px;
+}
+.refresh.busy { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── 但し書き ───────────────────────────── */
+
+.strip { padding: 5px 12px; font-size: 10px; font-weight: 500; flex: none; }
+.strip.caution { color: var(--caution); background: color-mix(in srgb, var(--caution) 10%, transparent); }
+.strip.notice  { color: var(--accent);  background: color-mix(in srgb, var(--accent) 10%, transparent); }
+
+/* ── 地図 ───────────────────────────────── */
+
+.map-wrap { position: relative; flex: 1 1 auto; min-height: 260px; }
+#map { position: absolute; inset: 0; background: var(--bg); }
+.leaflet-container { background: var(--bg); font: inherit; }
+.leaflet-control-attribution { font-size: 9px; }
+
+.chip {
+  position: absolute; top: 10px; left: 10px; z-index: 500;
+  padding: 7px 10px; border-radius: 9px; border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+  backdrop-filter: blur(12px); display: flex; flex-direction: column; gap: 2px;
+}
+.chip b { font-size: 15px; color: var(--accent); font-variant-numeric: tabular-nums; }
+.chip span { font-size: 11px; color: var(--text2); font-variant-numeric: tabular-nums; }
+
+.map-btn {
+  position: absolute; top: 10px; right: 10px; z-index: 500;
+  width: 44px; height: 44px; border-radius: 9px; cursor: pointer;
+  border: 1px solid var(--border); color: var(--text); font-size: 17px;
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+/* ── 操作部 ─────────────────────────────── */
+
+.controls {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 500;
+  padding: 8px 0; border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 86%, transparent);
+  backdrop-filter: blur(16px);
+}
+
+.tracking { display: flex; align-items: center; gap: 10px; padding: 12px 16px; }
+.tracking b { display: block; font-size: 12px; }
+.tracking small { font-size: 10px; color: var(--text3); }
+
+.slider-head { display: flex; align-items: baseline; gap: 8px; padding: 0 14px; }
+.slider-head span { font-size: 11px; font-weight: 600; color: var(--text3); }
+.slider-head b { font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.play {
+  margin-left: auto; height: 36px; padding: 0 14px; border: 0; border-radius: 99px;
+  background: var(--accent); color: var(--accent-ink);
+  font-size: 12px; font-weight: 700; cursor: pointer;
+}
+
+#slider { width: calc(100% - 28px); margin: 6px 14px 0; accent-color: var(--accent); height: 30px; }
+
+.ticks { display: flex; padding: 0 14px; }
+.ticks button {
+  flex: 1; height: 34px; border: 0; background: none; cursor: pointer;
+  font-size: 11px; font-weight: 600; color: var(--text3);
+}
+.ticks button:first-child { text-align: left; }
+.ticks button:last-child { text-align: right; }
+.ticks button.on { color: var(--accent); }
+
+.chips { display: flex; gap: 6px; overflow-x: auto; padding: 6px 12px 0; scrollbar-width: none; }
+.chips::-webkit-scrollbar { display: none; }
+.chips button {
+  display: flex; align-items: center; gap: 5px; flex: none; cursor: pointer;
+  height: 40px; padding: 0 13px; border-radius: 99px;
+  border: 1px solid var(--border); background: var(--raised);
+  color: var(--text2); font-size: 12px; font-weight: 600;
+}
+.chips button.on { color: var(--accent-ink); border-color: transparent; }
+.chips svg { flex: none; }
+
+/* ── パネル ─────────────────────────────── */
+
+.handle {
+  flex: none; width: 100%; height: 48px; border: 0; background: var(--bg); cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+  color: var(--text3); font-size: 11px; font-weight: 600;
+}
+.grabber { width: 40px; height: 5px; border-radius: 99px; background: var(--text3); opacity: .6; }
+
+.panel { flex: none; max-height: 42vh; overflow-y: auto; padding: 0 12px calc(var(--safe-bottom) + 12px); }
+.panel.closed { display: none; }
+
+.card {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 12px; padding: 10px 12px; margin-bottom: 8px;
+}
+.card-head { display: flex; justify-content: space-between; align-items: baseline; }
+.card-head span { font-size: 12px; font-weight: 600; color: var(--text2); }
+.card-head small, .agree-title small { font-size: 11px; color: var(--text3); font-variant-numeric: tabular-nums; }
+
+.note { margin: 6px 0 0; font-size: 9.5px; color: var(--text3); }
+
+.agree-top { display: flex; align-items: flex-end; gap: 10px; }
+.agree-title { display: flex; flex-direction: column; gap: 1px; }
+.agree-title span { font-size: 11px; font-weight: 600; color: var(--text2); }
+.agree-value { display: flex; align-items: baseline; gap: 2px; }
+.agree-value b { font-size: 32px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.agree-value span { font-size: 14px; font-weight: 700; opacity: .8; }
+.agree-right { margin-left: auto; text-align: right; display: flex; flex-direction: column; gap: 1px; }
+.agree-right b { font-size: 11px; font-weight: 700; }
+.agree-right small { font-size: 10px; color: var(--text3); font-variant-numeric: tabular-nums; }
+
+.bar { height: 5px; border-radius: 99px; background: var(--raised); margin-top: 6px; overflow: hidden; }
+.bar i { display: block; height: 100%; border-radius: 99px; transition: width .2s; }
+
+.cells { display: flex; gap: 4px; margin-top: 7px; }
+.cell {
+  flex: 1; text-align: center; padding: 5px 2px 6px; border-radius: 8px;
+  background: var(--raised); position: relative; overflow: hidden;
+}
+.cell i { position: absolute; top: 0; left: 0; right: 0; height: 2px; }
+.cell u { display: block; font-size: 9px; font-weight: 700; text-decoration: none; }
+.cell b { display: block; font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.cell s { display: block; font-size: 8px; font-weight: 500; color: var(--text3); text-decoration: none; }
+.cell.off { opacity: .55; }
+
+.chart { margin-top: 8px; }
+.chart svg { display: block; width: 100%; height: 92px; }
+
+/* ── 読み込み中 ─────────────────────────── */
+
+.splash {
+  position: fixed; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 14px; padding: 32px;
+  background: var(--bg); text-align: center; z-index: 2000;
+}
+.splash p { margin: 0; font-size: 12px; font-weight: 600; color: var(--text2); }
+.spinner {
+  width: 16px; height: 16px; flex: none; border-radius: 50%;
+  border: 2px solid var(--border); border-top-color: var(--accent);
+  animation: spin .8s linear infinite;
+}
+.spinner.big { width: 28px; height: 28px; border-width: 3px; }
+.retry {
+  border: 0; border-radius: 99px; padding: 10px 18px; cursor: pointer;
+  background: var(--accent); color: var(--accent-ink); font-size: 13px; font-weight: 700;
+}
+
+/* ── シート ─────────────────────────────── */
+
+.sheet {
+  position: fixed; inset: 0; z-index: 3000; background: var(--bg);
+  display: flex; flex-direction: column;
+}
+.sheet-head {
+  display: flex; align-items: center; justify-content: center; position: relative;
+  padding: calc(var(--safe-top) + 12px) 16px 12px; border-bottom: 1px solid var(--border);
+}
+.sheet-head b { font-size: 16px; }
+.close {
+  position: absolute; right: 12px; top: calc(var(--safe-top) + 6px);
+  height: 40px; padding: 0 16px; border-radius: 99px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--raised);
+  color: var(--text); font-size: 14px; font-weight: 600;
+}
+.sheet-body { flex: 1; overflow-y: auto; padding: 16px 16px calc(var(--safe-bottom) + 32px); }
+.sheet-body h3 { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--text3); }
+.sheet-body p { margin: 0 0 8px; font-size: 13px; }
+.sheet-body p.sub { font-size: 12px; color: var(--text2); }
+.sheet-body a { color: var(--accent); }
+.link-btn {
+  display: block; text-align: center; text-decoration: none; margin-top: 4px;
+  padding: 12px; border-radius: 9px; background: var(--raised);
+  color: var(--accent); font-size: 13px; font-weight: 600;
+}
+.model-row { display: flex; gap: 10px; align-items: flex-start; padding: 7px 0; }
+.model-row div { min-width: 0; }
+.model-row b { font-size: 13px; }
+.model-row small { display: block; font-size: 11px; color: var(--text2); }
+.model-row em { display: block; font-size: 10px; color: var(--text3); font-style: normal; font-variant-numeric: tabular-nums; }
+.model-row .end { color: var(--caution); }
+
+/* ── 台風の選択メニュー ─────────────────── */
+
+.menu {
+  position: fixed; inset: 0; z-index: 2500; background: rgba(0,0,0,.4);
+  display: flex; align-items: flex-end;
+}
+.menu-inner {
+  width: 100%; background: var(--panel); border-radius: 16px 16px 0 0;
+  padding: 10px 12px calc(var(--safe-bottom) + 14px);
+}
+.menu-inner button {
+  display: block; width: 100%; text-align: left; cursor: pointer;
+  border: 0; background: none; color: var(--text);
+  font-size: 15px; padding: 15px 10px; border-radius: 9px;
+}
+.menu-inner button.on { color: var(--accent); font-weight: 700; }
