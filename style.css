@@ -1,6 +1,7 @@
 /* 台風モデル比較 — 見た目の基準
    気象データを読むための道具らしく、落ち着いた面に数字を置く。
-   明暗の両方を用意して、端末の設定に合わせて切り替える。 */
+   明暗の両方を用意して、端末の設定に合わせて切り替える。
+   狭い画面は縦積み、広い画面は地図とパネルの2段組。 */
 
 :root {
   --bg: #0c1016;
@@ -19,6 +20,7 @@
   --ecmwf: #ff7350; --gfs: #40c7f2; --gsm: #ffcc40; --icon: #5cdb8c; --gem: #ba8cff;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --side-w: 380px;
 }
 
 @media (prefers-color-scheme: light) {
@@ -41,28 +43,25 @@
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-
-/* hidden 属性は display 指定に負けるので、ここで優先させる */
 [hidden] { display: none !important; }
 
 html, body {
   margin: 0; height: 100%; overflow: hidden;
-  background: var(--bg);
-  color: var(--text);
+  background: var(--bg); color: var(--text);
   font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
   overscroll-behavior: none;
 }
 
 #app { display: flex; flex-direction: column; height: 100%; }
+.main { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
 
 /* ── ヘッダー ───────────────────────────── */
 
 .header { padding: calc(var(--safe-top) + 6px) 14px 8px; flex: none; }
-
-.title-row { display: flex; align-items: center; gap: 8px; }
+.title-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 .title-btn {
-  display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0;
+  display: flex; align-items: center; gap: 6px; min-width: 0;
   background: none; border: 0; padding: 6px 0; margin: 0; color: inherit;
   font: inherit; text-align: left; cursor: pointer;
 }
@@ -82,19 +81,20 @@ html, body {
 }
 
 .observation {
+  flex: 1 1 100%; order: 3;
   font-size: 11px; font-weight: 500; color: var(--text2);
   font-variant-numeric: tabular-nums; white-space: nowrap;
-  overflow: hidden; text-overflow: ellipsis; margin-top: 2px;
+  overflow: hidden; text-overflow: ellipsis;
 }
 
-.time-row { display: flex; align-items: center; gap: 10px; margin-top: 7px; }
+.time-row { display: flex; align-items: center; gap: 10px; order: 4; flex: 1 1 100%; margin-top: 5px; }
 .time-item { display: flex; flex-direction: column; gap: 1px; }
 .time-item span { font-size: 9px; font-weight: 600; color: var(--text3); }
 .time-item b { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .divider { width: 1px; height: 20px; background: var(--border); }
 
 .refresh {
-  margin-left: auto; width: 38px; height: 34px; border-radius: 99px; cursor: pointer;
+  margin-left: auto; width: 40px; height: 36px; border-radius: 99px; cursor: pointer;
   border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   color: var(--accent); font-size: 15px;
@@ -104,31 +104,35 @@ html, body {
 
 /* ── 但し書き ───────────────────────────── */
 
-.strip { padding: 5px 12px; font-size: 10px; font-weight: 500; flex: none; }
+.strip { padding: 5px 14px; font-size: 10px; font-weight: 500; flex: none; }
 .strip.caution { color: var(--caution); background: color-mix(in srgb, var(--caution) 10%, transparent); }
 .strip.notice  { color: var(--accent);  background: color-mix(in srgb, var(--accent) 10%, transparent); }
 
 /* ── 地図 ───────────────────────────────── */
 
-.map-wrap { position: relative; flex: 1 1 auto; min-height: 260px; }
+.map-wrap { position: relative; flex: 1 1 auto; min-height: 240px; }
 #map { position: absolute; inset: 0; background: var(--bg); }
 .leaflet-container { background: var(--bg); font: inherit; }
 .leaflet-control-attribution { font-size: 9px; }
 
-.chip {
-  position: absolute; top: 10px; left: 10px; z-index: 500;
-  padding: 7px 10px; border-radius: 9px; border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--panel) 82%, transparent);
-  backdrop-filter: blur(12px); display: flex; flex-direction: column; gap: 2px;
+.chip, .legend {
+  position: absolute; z-index: 500;
+  border-radius: 9px; border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 85%, transparent);
+  backdrop-filter: blur(12px);
 }
+.chip { top: 10px; left: 10px; padding: 7px 10px; display: flex; flex-direction: column; gap: 2px; }
 .chip b { font-size: 15px; color: var(--accent); font-variant-numeric: tabular-nums; }
 .chip span { font-size: 11px; color: var(--text2); font-variant-numeric: tabular-nums; }
+
+.legend { right: 10px; bottom: 10px; padding: 7px 9px; display: flex; flex-direction: column; gap: 4px; }
+.legend div { display: flex; align-items: center; gap: 6px; font-size: 10px; font-weight: 600; }
 
 .map-btn {
   position: absolute; top: 10px; right: 10px; z-index: 500;
   width: 44px; height: 44px; border-radius: 9px; cursor: pointer;
   border: 1px solid var(--border); color: var(--text); font-size: 17px;
-  background: color-mix(in srgb, var(--panel) 82%, transparent);
+  background: color-mix(in srgb, var(--panel) 85%, transparent);
   backdrop-filter: blur(12px);
 }
 
@@ -137,7 +141,7 @@ html, body {
 .controls {
   position: absolute; left: 0; right: 0; bottom: 0; z-index: 500;
   padding: 8px 0; border-top: 1px solid var(--border);
-  background: color-mix(in srgb, var(--panel) 86%, transparent);
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
   backdrop-filter: blur(16px);
 }
 
@@ -166,16 +170,38 @@ html, body {
 .ticks button:last-child { text-align: right; }
 .ticks button.on { color: var(--accent); }
 
-.chips { display: flex; gap: 6px; overflow-x: auto; padding: 6px 12px 0; scrollbar-width: none; }
+.chips { display: flex; gap: 6px; overflow-x: auto; padding: 6px 14px 0; scrollbar-width: none; }
 .chips::-webkit-scrollbar { display: none; }
 .chips button {
   display: flex; align-items: center; gap: 5px; flex: none; cursor: pointer;
   height: 40px; padding: 0 13px; border-radius: 99px;
   border: 1px solid var(--border); background: var(--raised);
-  color: var(--text2); font-size: 12px; font-weight: 600;
+  color: var(--text2); font-size: 12px; font-weight: 600; white-space: nowrap;
 }
 .chips button.on { color: var(--accent-ink); border-color: transparent; }
-.chips svg { flex: none; }
+.chips .sep { width: 1px; height: 22px; background: var(--border); flex: none; align-self: center; margin: 0 2px; }
+
+/* ── 畳んだときの気圧帯 ─────────────────── */
+
+.pressure-strip {
+  flex: none; display: flex; align-items: center;
+  width: 100%; height: 54px; padding: 0 10px; cursor: pointer;
+  border: 0; border-top: 1px solid var(--border); background: var(--bg);
+  overflow-x: auto; scrollbar-width: none;
+}
+.pressure-strip::-webkit-scrollbar { display: none; }
+.ps-item {
+  display: flex; flex-direction: column; align-items: center;
+  flex: 1 0 auto; min-width: 56px; padding: 0 3px;
+}
+.ps-item u { font-size: 9px; font-weight: 700; text-decoration: none; }
+.ps-item b { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.ps-agree {
+  flex: 0 0 auto; padding-left: 10px; margin-left: 6px;
+  border-left: 1px solid var(--border); text-align: center;
+}
+.ps-agree u { display: block; font-size: 9px; font-weight: 700; color: var(--text3); text-decoration: none; }
+.ps-agree b { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
 
 /* ── パネル ─────────────────────────────── */
 
@@ -186,18 +212,29 @@ html, body {
 }
 .grabber { width: 40px; height: 5px; border-radius: 99px; background: var(--text3); opacity: .6; }
 
-.panel { flex: none; max-height: 42vh; overflow-y: auto; padding: 0 12px calc(var(--safe-bottom) + 12px); }
+.panel {
+  flex: none; max-height: 42vh; overflow-y: auto;
+  padding: 0 12px calc(var(--safe-bottom) + 12px);
+}
 .panel.closed { display: none; }
 
 .card {
   background: var(--panel); border: 1px solid var(--border);
   border-radius: 12px; padding: 10px 12px; margin-bottom: 8px;
 }
-.card-head { display: flex; justify-content: space-between; align-items: baseline; }
+.card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .card-head span { font-size: 12px; font-weight: 600; color: var(--text2); }
 .card-head small, .agree-title small { font-size: 11px; color: var(--text3); font-variant-numeric: tabular-nums; }
 
 .note { margin: 6px 0 0; font-size: 9.5px; color: var(--text3); }
+.warn { color: var(--caution); font-size: 12px; }
+
+.mini-btn {
+  height: 34px; padding: 0 12px; border-radius: 99px; cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent); font-size: 11px; font-weight: 700;
+}
 
 .agree-top { display: flex; align-items: flex-end; gap: 10px; }
 .agree-title { display: flex; flex-direction: column; gap: 1px; }
@@ -215,7 +252,7 @@ html, body {
 .cells { display: flex; gap: 4px; margin-top: 7px; }
 .cell {
   flex: 1; text-align: center; padding: 5px 2px 6px; border-radius: 8px;
-  background: var(--raised); position: relative; overflow: hidden;
+  background: var(--raised); position: relative; overflow: hidden; min-width: 0;
 }
 .cell i { position: absolute; top: 0; left: 0; right: 0; height: 2px; }
 .cell u { display: block; font-size: 9px; font-weight: 700; text-decoration: none; }
@@ -225,6 +262,49 @@ html, body {
 
 .chart { margin-top: 8px; }
 .chart svg { display: block; width: 100%; height: 92px; }
+
+.ens-value { display: flex; align-items: baseline; gap: 6px; margin-top: 6px; }
+.ens-value b { font-size: 28px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.ens-value span { font-size: 13px; font-weight: 700; }
+.ens-value small { margin-left: auto; font-size: 11px; color: var(--text3); text-align: right; line-height: 1.3; }
+.ens-load {
+  width: 100%; height: 44px; margin-top: 8px; border: 0; border-radius: 99px; cursor: pointer;
+  background: var(--accent); color: var(--accent-ink); font-size: 13px; font-weight: 700;
+}
+.ens-clear {
+  height: 40px; margin-top: 8px; padding: 0 14px; border: 0; border-radius: 99px; cursor: pointer;
+  background: var(--raised); color: var(--text2); font-size: 12px; font-weight: 600;
+}
+
+.row-card {
+  display: flex; align-items: center; gap: 10px; width: 100%; cursor: pointer;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 12px; padding: 12px; margin-bottom: 8px; text-align: left;
+  color: inherit; font: inherit;
+}
+.row-icon { font-size: 16px; flex: none; }
+.row-text { flex: 1; min-width: 0; }
+.row-text b { display: block; font-size: 13px; font-weight: 600; }
+.row-text small { display: block; font-size: 10px; color: var(--text3); }
+.row-chevron { color: var(--text3); font-size: 18px; flex: none; }
+
+/* ── 広い画面：地図とパネルを横に並べる ── */
+
+@media (min-width: 900px) {
+  .main { flex-direction: row; }
+  .map-wrap { flex: 1 1 auto; min-height: 0; }
+  .panel {
+    flex: 0 0 var(--side-w); width: var(--side-w); max-height: none;
+    border-left: 1px solid var(--border); padding-top: 12px;
+  }
+  .panel.closed { display: block; }
+  .handle, .pressure-strip { display: none !important; }
+  .header { padding-inline: 20px; }
+  .title-row { flex-wrap: nowrap; }
+  .observation { flex: 0 1 auto; order: 2; }
+  .time-row { flex: 0 0 auto; order: 3; margin-top: 0; margin-left: auto; }
+  .refresh { margin-left: 8px; }
+}
 
 /* ── 読み込み中 ─────────────────────────── */
 
@@ -241,7 +321,7 @@ html, body {
 }
 .spinner.big { width: 28px; height: 28px; border-width: 3px; }
 .retry {
-  border: 0; border-radius: 99px; padding: 10px 18px; cursor: pointer;
+  border: 0; border-radius: 99px; padding: 12px 20px; cursor: pointer;
   background: var(--accent); color: var(--accent-ink); font-size: 13px; font-weight: 700;
 }
 
@@ -249,10 +329,10 @@ html, body {
 
 .sheet {
   position: fixed; inset: 0; z-index: 3000; background: var(--bg);
-  display: flex; flex-direction: column;
+  display: flex; flex-direction: column; overflow: hidden;
 }
 .sheet-head {
-  display: flex; align-items: center; justify-content: center; position: relative;
+  display: flex; align-items: center; justify-content: center; position: relative; flex: none;
   padding: calc(var(--safe-top) + 12px) 16px 12px; border-bottom: 1px solid var(--border);
 }
 .sheet-head b { font-size: 16px; }
@@ -267,11 +347,60 @@ html, body {
 .sheet-body p { margin: 0 0 8px; font-size: 13px; }
 .sheet-body p.sub { font-size: 12px; color: var(--text2); }
 .sheet-body a { color: var(--accent); }
-.link-btn {
-  display: block; text-align: center; text-decoration: none; margin-top: 4px;
-  padding: 12px; border-radius: 9px; background: var(--raised);
-  color: var(--accent); font-size: 13px; font-weight: 600;
+
+.link-btn, .danger-btn {
+  display: block; width: 100%; text-align: center; text-decoration: none; margin-top: 4px;
+  padding: 13px; border: 0; border-radius: 9px; background: var(--raised);
+  color: var(--accent); font-size: 13px; font-weight: 600; cursor: pointer;
 }
+.danger-btn { color: var(--bad); }
+
+.site-top { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.pill-btn {
+  height: 46px; padding: 0 16px; border-radius: 99px; cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent); font-size: 14px; font-weight: 700;
+}
+.pill-btn.ghost {
+  border-color: var(--border); background: var(--raised); color: var(--text2);
+  font-size: 13px; font-weight: 600;
+}
+
+.search-box { margin-bottom: 12px; }
+.search-box input {
+  width: 100%; height: 50px; padding: 0 14px; border-radius: 11px;
+  border: 1px solid var(--border); background: var(--raised);
+  color: var(--text); font: inherit;
+}
+#site-results { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+#site-results button {
+  display: flex; align-items: center; gap: 10px; width: 100%; cursor: pointer;
+  min-height: 56px; padding: 8px 12px; border-radius: 10px; text-align: left;
+  border: 1px solid var(--border); background: var(--panel); color: inherit; font: inherit;
+}
+#site-results b { display: block; font-size: 14px; }
+#site-results small { display: block; font-size: 11px; color: var(--text3); font-variant-numeric: tabular-nums; }
+
+.seg { display: flex; gap: 6px; margin-bottom: 12px; }
+.seg button {
+  flex: 1; height: 46px; border: 0; border-radius: 10px; cursor: pointer;
+  background: var(--raised); color: var(--text2); font-size: 13px; font-weight: 600;
+}
+.seg button.on { background: var(--accent); color: var(--accent-ink); }
+
+.peak-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; }
+.peak-row u { font-size: 11px; font-weight: 700; text-decoration: none; width: 54px; flex: none; }
+.peak-row b { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.peak-row s { font-size: 9px; color: var(--text3); text-decoration: none; }
+.peak-row small { margin-left: auto; font-size: 11px; color: var(--text3); font-variant-numeric: tabular-nums; }
+
+.verify-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+.verify-row u { font-size: 11px; font-weight: 700; text-decoration: none; width: 62px; flex: none; }
+.verify-row .vbar { flex: 1; height: 7px; border-radius: 99px; background: var(--raised); overflow: hidden; }
+.verify-row .vbar i { display: block; height: 100%; border-radius: 99px; }
+.verify-row b { width: 62px; text-align: right; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
 .model-row { display: flex; gap: 10px; align-items: flex-start; padding: 7px 0; }
 .model-row div { min-width: 0; }
 .model-row b { font-size: 13px; }
@@ -279,15 +408,13 @@ html, body {
 .model-row em { display: block; font-size: 10px; color: var(--text3); font-style: normal; font-variant-numeric: tabular-nums; }
 .model-row .end { color: var(--caution); }
 
-/* ── 台風の選択メニュー ─────────────────── */
+/* ── 選択メニュー ───────────────────────── */
 
-.menu {
-  position: fixed; inset: 0; z-index: 2500; background: rgba(0,0,0,.4);
-  display: flex; align-items: flex-end;
-}
+.menu { position: fixed; inset: 0; z-index: 3500; background: rgba(0,0,0,.45); display: flex; align-items: flex-end; }
 .menu-inner {
-  width: 100%; background: var(--panel); border-radius: 16px 16px 0 0;
-  padding: 10px 12px calc(var(--safe-bottom) + 14px);
+  width: 100%; max-width: 560px; margin: 0 auto;
+  background: var(--panel); border-radius: 16px 16px 0 0;
+  padding: 10px 12px calc(var(--safe-bottom) + 14px); max-height: 70vh; overflow-y: auto;
 }
 .menu-inner button {
   display: block; width: 100%; text-align: left; cursor: pointer;
@@ -295,3 +422,21 @@ html, body {
   font-size: 15px; padding: 15px 10px; border-radius: 9px;
 }
 .menu-inner button.on { color: var(--accent); font-weight: 700; }
+.menu-inner hr { border: 0; border-top: 1px solid var(--border); margin: 6px 0; }
+@media (min-width: 900px) { .menu { align-items: center; } .menu-inner { border-radius: 16px; } }
+
+/* ── 広い画面のシート ─────────────────────
+   基本の .sheet は inset:0 で画面いっぱいに広げている。
+   同じ詳細度なので、打ち消すにはこの指定を後ろに置く必要がある。 */
+
+@media (min-width: 900px) {
+  .sheet {
+    left: 50%; right: auto; transform: translateX(-50%);
+    width: min(760px, calc(100% - 48px));
+    top: 24px; bottom: 24px;
+    border: 1px solid var(--border); border-radius: 14px;
+    box-shadow: 0 24px 70px rgba(0,0,0,.35);
+  }
+  .sheet-head { padding-top: 14px; }
+  .close { top: 8px; }
+}

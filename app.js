@@ -538,6 +538,7 @@ const TimeFormat = {
   hourMinute(d) { return TimeFormat.fmt({ hour: '2-digit', minute: '2-digit' }).format(d); },
   short(d) { return TimeFormat.fmt({ month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(d); },
   long(d) { return TimeFormat.fmt({ month: 'long', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit' }).format(d); },
+  day(d) { return TimeFormat.fmt({ month: 'numeric', day: 'numeric', weekday: 'short' }).format(d); },
   lead(h) { return Math.round(h) === 0 ? '現在' : `+${Math.round(h)}時間`; }
 };
 
@@ -568,3 +569,364 @@ function reviveDates(o) {
   }
   return o;
 }
+
+// ───────────────────────────────── アンサンブル予報
+//
+// 同じモデルを条件を少しずつ変えて何十回も走らせたもの。
+// 決定論モデル同士の食い違い（モデル一致度）とは意味が違い、
+// こちらは「同じモデルの中での振れ幅」を表す。
+
+const ENSEMBLES = [
+  { id: 'gefs',  om: 'gfs025',       label: 'GEFS',      base: 'gfs',   members: 31 },
+  { id: 'eps',   om: 'ecmwf_ifs025', label: 'ECMWF ENS', base: 'ecmwf', members: 51 },
+  { id: 'icon',  om: 'icon_global',  label: 'ICON-EPS',  base: 'icon',  members: 40 },
+  { id: 'cmc',   om: 'gem_global',   label: 'CMC ENS',   base: 'gem',   members: 21 }
+];
+
+const Ensemble = {
+  // すでに分かっている進路に沿って、筒状の探索範囲を作る。
+  // 決定論モデルの総意を背骨にすれば、持続外挿よりずっと狭い範囲で足りる。
+  tube(spine, radiusAt, maxCells = 220) {
+    let spacing = 1.5;
+    for (;;) {
+      const cells = new Set();
+      for (const node of spine) {
+        const n = Math.max(1, Math.round(radiusAt(node.hours) / spacing));
+        const bi = Math.round(node.lat / spacing), bj = Math.round(node.lon / spacing);
+        for (let i = -n; i <= n; i++) {
+          for (let j = -n; j <= n; j++) {
+            if (i * i + j * j > n * n) continue;
+            if (Math.abs((bi + i) * spacing) > 89) continue;
+            cells.add((bi + i) + ',' + (bj + j));
+          }
+        }
+      }
+      if (cells.size <= maxCells || spacing > 3.0) {
+        const list = [...cells].map(k => k.split(',').map(Number))
+          .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+        return { spacing, cells: list };
+      }
+      spacing += 0.25;
+    }
+  },
+
+  async fetchGrid(grid, system, days) {
+    const lats = [], lons = [];
+    for (const [i, j] of grid.cells) {
+      lats.push(Math.round(i * grid.spacing * 100) / 100);
+      lons.push(GeoMath.norm(Math.round(j * grid.spacing * 100) / 100));
+    }
+    const url = 'https://ensemble-api.open-meteo.com/v1/ensemble'
+      + '?latitude=' + lats.join(',') + '&longitude=' + lons.join(',')
+      + '&hourly=pressure_msl&models=' + system.om
+      + '&forecast_days=' + days + '&temporal_resolution=hourly_6&timezone=UTC';
+    const raw = await HTTP.json(url);
+    const locations = Array.isArray(raw) ? raw : [raw];
+    if (locations.length !== grid.cells.length) throw new Error('地点数が合いません。');
+    const times = locations[0].hourly.time.map(t => new Date(t + 'Z'));
+    // メンバーのキーは応答から拾う（モデルによって数が違う）
+    const keys = Object.keys(locations[0].hourly)
+      .filter(k => k.startsWith('pressure_msl')).sort();
+    const values = {};
+    for (const k of keys) values[k] = locations.map(l => l.hourly[k] || []);
+    return { times, values, keys };
+  },
+
+  // メンバーごとに中心を追う。通信は1回で済ませる。
+  async run(system, observation, tracks, onProgress) {
+    const step = Tracker.stepHours;
+    const initialTime = tracks.initialTime;
+
+    // 背骨：各時刻における決定論モデルの平均位置
+    const spine = [];
+    for (let hour = 0; hour <= Tracker.maxLeadHours; hour += step) {
+      const pts = tracks.models.map(m => interpolate(m, hour)).filter(Boolean);
+      if (!pts.length) break;
+      const lat = pts.reduce((s, p) => s + p.lat, 0) / pts.length;
+      const ref = pts[0].lon;
+      const lon = GeoMath.norm(
+        pts.reduce((s, p) => s + ref + GeoMath.norm(p.lon - ref), 0) / pts.length);
+      spine.push({ hours: hour, lat, lon });
+    }
+    if (spine.length < 2) throw new Error('背骨にする進路が足りません。');
+
+    if (onProgress) onProgress('探索範囲を作っています');
+    const grid = Ensemble.tube(spine, h => 2.5 + 0.055 * h);
+    const days = Math.max(3, Math.ceil(spine.at(-1).hours / 24) + 2);
+
+    if (onProgress) onProgress(`${system.label} を取得しています`);
+    const press = await Ensemble.fetchGrid(grid, system, days);
+    const baseIndex = Tracker.nearestTimeIndex(press.times, initialTime);
+
+    const speed = observation.speed || 20;
+    const bearing = (observation.courseDegrees == null ? 45 : observation.courseDegrees) * Math.PI / 180;
+    const latPerHour = speed * Math.cos(bearing) / 111;
+    const lonPerHour = speed * Math.sin(bearing) /
+      (111 * Math.max(0.2, Math.cos(observation.latitude * Math.PI / 180)));
+    const gapHours = Math.max(0, (initialTime - observation.analysisTime) / 3600000);
+    const startLat = observation.latitude + latPerHour * gapHours;
+    const startLon = GeoMath.norm(observation.longitude + lonPerHour * gapHours);
+
+    if (onProgress) onProgress('メンバーの中心を追っています');
+    const members = [];
+    for (const key of press.keys) {
+      const st = { lat: startLat, lon: startLon, points: [], ended: null };
+      for (let hour = 0; hour <= spine.at(-1).hours; hour += step) {
+        if (st.ended) break;
+        Tracker.advance(st, hour, key, grid, { values: press.values }, baseIndex + hour / step);
+        if (hour === 0) { st.moveLat = latPerHour * step; st.moveLon = lonPerHour * step; }
+      }
+      if (st.points.length < 2) continue;
+      const m = key.match(/member(\d+)/);
+      members.push({ index: m ? parseInt(m[1], 10) : 0, points: st.points });
+    }
+    if (!members.length) throw new Error('メンバーの中心を追えませんでした。');
+    members.sort((a, b) => a.index - b.index);
+    return { system: system.id, initialTime, members };
+  },
+
+  // メンバーの散らばり。これも到達確率ではない。
+  spread(ens, hours) {
+    const pts = ens.members.map(m => interpolate(m, hours)).filter(Boolean);
+    if (pts.length < 2) return null;
+    const c = GeoMath.centroid(pts.map(p => [p.lat, p.lon]));
+    const d = pts.map(p => GeoMath.distanceKm(c, [p.lat, p.lon]));
+    return { km: d.reduce((s, v) => s + v, 0) / d.length, live: pts.length, total: ens.members.length };
+  }
+};
+
+// ───────────────────────────────── 地点ごとの風と雨
+
+const ELEMENTS = [
+  { id: 'wind',  om: 'wind_speed_10m',  label: '風速',         unit: 'm/s',  peak: '最大風速' },
+  { id: 'gust',  om: 'wind_gusts_10m',  label: '最大瞬間風速', unit: 'm/s',  peak: '最大瞬間' },
+  { id: 'rain',  om: 'precipitation',   label: '降水量',       unit: 'mm/h', peak: '最大雨量' }
+];
+
+const DEFAULT_SITES = [
+  { name: '那覇',   lat: 26.21, lon: 127.68 },
+  { name: '鹿児島', lat: 31.60, lon: 130.56 },
+  { name: '福岡',   lat: 33.59, lon: 130.40 },
+  { name: '高知',   lat: 33.56, lon: 133.53 },
+  { name: '広島',   lat: 34.39, lon: 132.46 },
+  { name: '大阪',   lat: 34.69, lon: 135.50 },
+  { name: '名古屋', lat: 35.18, lon: 136.91 },
+  { name: '東京',   lat: 35.69, lon: 139.69 },
+  { name: '仙台',   lat: 38.27, lon: 140.87 },
+  { name: '札幌',   lat: 43.06, lon: 141.35 }
+];
+
+const SiteData = {
+  // 1地点ぶんなので通信は軽い（数十KB）
+  async fetch(site) {
+    const url = 'https://api.open-meteo.com/v1/forecast'
+      + `?latitude=${site.lat}&longitude=${site.lon}`
+      + '&hourly=' + ELEMENTS.map(e => e.om).join(',')
+      + '&models=' + MODELS.map(m => m.om).join(',')
+      + '&forecast_days=5&wind_speed_unit=ms&timezone=Asia%2FTokyo';
+    const d = await HTTP.json(url);
+    const times = d.hourly.time.map(t => new Date(t + '+09:00'));
+    const values = {};
+    for (const e of ELEMENTS) {
+      values[e.id] = {};
+      for (const m of MODELS) {
+        values[e.id][m.id] = d.hourly[`${e.om}_${m.om}`] || d.hourly[e.om] || [];
+      }
+    }
+    return { site, times, values, at: new Date() };
+  },
+
+  peak(data, elementId, modelId) {
+    const series = data.values[elementId][modelId] || [];
+    let best = null;
+    series.forEach((v, i) => {
+      if (v == null || i >= data.times.length) return;
+      if (!best || v > best.value) best = { value: v, time: data.times[i] };
+    });
+    return best;
+  },
+
+  max(data, elementId) {
+    let m = 0;
+    for (const model of MODELS) {
+      for (const v of data.values[elementId][model.id] || []) if (v != null && v > m) m = v;
+    }
+    return m;
+  },
+
+  // 地名で探す。MapKit は使えないので Open-Meteo のジオコーディングを使う。
+  async search(query) {
+    const url = 'https://geocoding-api.open-meteo.com/v1/search'
+      + '?name=' + encodeURIComponent(query) + '&count=10&language=ja&format=json';
+    const d = await HTTP.json(url);
+    return (d.results || []).map(r => ({
+      name: r.name,
+      detail: [r.admin1, r.country].filter(Boolean).join(' '),
+      lat: Math.round(r.latitude * 100) / 100,
+      lon: Math.round(r.longitude * 100) / 100
+    }));
+  },
+
+  // 現在地。HTTPS でのみ使える。
+  current() {
+    return new Promise(resolve => {
+      if (!navigator.geolocation) return resolve(null);
+      navigator.geolocation.getCurrentPosition(
+        p => resolve({
+          name: '現在地',
+          lat: Math.round(p.coords.latitude * 100) / 100,
+          lon: Math.round(p.coords.longitude * 100) / 100
+        }),
+        () => resolve(null),
+        { timeout: 10000, maximumAge: 300000 }
+      );
+    });
+  }
+};
+
+// ───────────────────────────────── 予報の振り返り
+//
+// 取った予報を端末の中に残しておき、あとから実況と突き合わせる。
+// 台風1つの数回ぶんの比較なので、モデルの優劣を決めるものではない。
+
+const Archive = {
+  key: 'typhoon-compare.archive',
+  limit: 24,
+
+  all() {
+    try {
+      const raw = localStorage.getItem(Archive.key);
+      return raw ? reviveDates(JSON.parse(raw)) : [];
+    } catch { return []; }
+  },
+
+  save(situation, tracks) {
+    if (!situation || !tracks || !tracks.models.length) return;
+    const list = Archive.all();
+    const stamp = tracks.initialTime.getTime();
+    const code = situation.typhoon.code;
+    // 同じ台風・同じ初期時刻は1件だけ残す
+    const rest = list.filter(e => !(e.code === code && new Date(e.initialTime).getTime() === stamp));
+    rest.push({
+      code,
+      displayName: situation.typhoon.displayName,
+      initialTime: tracks.initialTime,
+      observation: {
+        analysisTime: situation.observation.analysisTime,
+        latitude: situation.observation.latitude,
+        longitude: situation.observation.longitude
+      },
+      official: situation.official,
+      models: tracks.models.map(m => ({ id: m.id, points: m.points }))
+    });
+    rest.sort((a, b) => new Date(a.initialTime) - new Date(b.initialTime));
+    const kept = rest.slice(-Archive.limit);
+    try { localStorage.setItem(Archive.key, JSON.stringify(kept)); } catch {}
+  },
+
+  clear() { try { localStorage.removeItem(Archive.key); } catch {} }
+};
+
+const Verification = {
+  minLead: 5,
+  buckets: [[0, 24], [24, 48], [48, 72], [72, 96], [96, 120]],
+
+  // 気象庁の公式予報のずれ。
+  // 起点にはその予報を出した時点の実況位置を使う。
+  // これを入れないと、最初の予報点より手前の時刻で誤差が大きく出てしまう。
+  officialError(entry, leadHours, actual) {
+    if (!entry.official || !entry.official.points || !entry.official.points.length) return null;
+    const nodes = [{ h: 0, c: [entry.observation.latitude, entry.observation.longitude] }]
+      .concat(entry.official.points.map(p => ({ h: p.leadHours, c: p.center })));
+    const last = nodes.at(-1);
+    if (leadHours > last.h) return null;
+    if (leadHours <= 0) return GeoMath.distanceKm(actual, nodes[0].c);
+    const upper = nodes.findIndex(n => n.h >= leadHours);
+    if (upper <= 0) return null;
+    const a = nodes[upper - 1], b = nodes[upper];
+    const span = b.h - a.h;
+    if (span <= 0) return GeoMath.distanceKm(actual, a.c);
+    const r = (leadHours - a.h) / span;
+    const lat = a.c[0] + (b.c[0] - a.c[0]) * r;
+    const lon = GeoMath.norm(a.c[1] + GeoMath.norm(b.c[1] - a.c[1]) * r);
+    return GeoMath.distanceKm(actual, [lat, lon]);
+  },
+
+  // いまの実況と、残してある予報を突き合わせる
+  against(observation, code) {
+    const actual = [observation.latitude, observation.longitude];
+    const out = [];
+    for (const entry of Archive.all()) {
+      if (entry.code !== code) continue;
+      const lead = (observation.analysisTime - new Date(entry.initialTime)) / 3600000;
+      if (lead < Verification.minLead || lead > Tracker.maxLeadHours) continue;
+      const rows = [];
+      for (const m of entry.models) {
+        const p = interpolate(m, lead);
+        if (!p) continue;
+        rows.push({ id: m.id, km: GeoMath.distanceKm(actual, [p.lat, p.lon]) });
+      }
+      if (!rows.length) continue;
+      rows.sort((a, b) => a.km - b.km);
+      out.push({
+        initialTime: new Date(entry.initialTime),
+        verifiedAt: observation.analysisTime,
+        leadHours: lead,
+        rows,
+        official: Verification.officialError(entry, lead, actual)
+      });
+    }
+    return out.sort((a, b) => b.initialTime - a.initialTime);
+  },
+
+  // 台風をまたいだ集計。
+  // それぞれの保存データが自分の実況を持っているので、
+  // もう消えてしまった台風についても答え合わせができる。
+  summary() {
+    const list = Archive.all();
+    const byCode = {};
+    for (const e of list) (byCode[e.code] = byCode[e.code] || []).push(e);
+
+    const errors = {}, official = {};
+    let comparisons = 0;
+    for (const code of Object.keys(byCode)) {
+      const ordered = byCode[code].sort((a, b) => new Date(a.initialTime) - new Date(b.initialTime));
+      for (let i = 0; i < ordered.length; i++) {
+        const forecast = ordered[i];
+        for (let j = i + 1; j < ordered.length; j++) {
+          const truth = ordered[j];
+          const lead = (new Date(truth.observation.analysisTime) - new Date(forecast.initialTime)) / 3600000;
+          if (lead < Verification.minLead || lead > Tracker.maxLeadHours) continue;
+          const bucket = Verification.buckets.find(b => lead > b[0] && lead <= b[1]);
+          if (!bucket) continue;
+          const actual = [truth.observation.latitude, truth.observation.longitude];
+          let counted = false;
+          for (const m of forecast.models) {
+            const p = interpolate(m, lead);
+            if (!p) continue;
+            const key = bucket[0];
+            errors[key] = errors[key] || {};
+            (errors[key][m.id] = errors[key][m.id] || []).push(GeoMath.distanceKm(actual, [p.lat, p.lon]));
+            counted = true;
+          }
+          const oe = Verification.officialError(forecast, lead, actual);
+          if (oe != null) { (official[bucket[0]] = official[bucket[0]] || []).push(oe); counted = true; }
+          if (counted) comparisons++;
+        }
+      }
+    }
+
+    const mean = a => a.reduce((s, v) => s + v, 0) / a.length;
+    const out = [];
+    for (const [lo, hi] of Verification.buckets) {
+      const byModel = errors[lo] || {}, off = official[lo] || [];
+      if (!Object.keys(byModel).length && !off.length) continue;
+      const rows = MODELS
+        .filter(m => byModel[m.id] && byModel[m.id].length)
+        .map(m => ({ id: m.id, km: mean(byModel[m.id]), n: byModel[m.id].length }))
+        .sort((a, b) => a.km - b.km);
+      out.push({ lo, hi, rows, official: off.length ? mean(off) : null, officialN: off.length });
+    }
+    return { buckets: out, typhoons: Object.keys(byCode).length, comparisons };
+  }
+};

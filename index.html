@@ -16,7 +16,6 @@
 <body>
 
 <div id="app" hidden>
-  <!-- ヘッダー -->
   <header class="header">
     <div class="title-row">
       <button id="typhoon-pick" class="title-btn">
@@ -25,96 +24,155 @@
         <span id="data-badge" class="badge">—</span>
         <span id="pick-chevron" class="chevron" hidden>▾</span>
       </button>
-      <button id="about-btn" class="icon-btn" aria-label="このアプリについて">ⓘ</button>
-    </div>
-    <div id="observation" class="observation">—</div>
-    <div class="time-row">
-      <div class="time-item"><span>現在時刻</span><b id="now-time">--:--:--</b></div>
-      <i class="divider"></i>
-      <div class="time-item"><span>初期時刻</span><b id="initial-time">—</b></div>
-      <i class="divider"></i>
-      <div class="time-item"><span>データ更新</span><b id="updated-time">--:--</b></div>
+      <div id="observation" class="observation"></div>
+      <div class="time-row">
+        <div class="time-item"><span>現在時刻</span><b id="now-time">--:--:--</b></div>
+        <i class="divider"></i>
+        <div class="time-item"><span>初期時刻</span><b id="initial-time">—</b></div>
+        <i class="divider"></i>
+        <div class="time-item"><span>データ更新</span><b id="updated-time">--:--</b></div>
+      </div>
       <button id="refresh-btn" class="refresh" aria-label="データを取り直す">↻</button>
+      <button id="about-btn" class="icon-btn" aria-label="このアプリについて">ⓘ</button>
     </div>
   </header>
 
-  <!-- 但し書き -->
   <div class="strip caution">
     各機関の数値予報モデルの気圧から進路を推定した比較表示です。気象庁の公式予報ではありません。
   </div>
   <div id="notice" class="strip notice" hidden></div>
 
-  <!-- 地図 -->
-  <div class="map-wrap">
-    <div id="map"></div>
-    <div id="time-chip" class="chip">
-      <b id="chip-lead">現在</b>
-      <span id="chip-time"></span>
+  <div class="main">
+    <div class="map-wrap">
+      <div id="map"></div>
+      <div id="time-chip" class="chip">
+        <b id="chip-lead">現在</b>
+        <span id="chip-time"></span>
+      </div>
+      <div id="map-legend" class="legend" hidden></div>
+      <button id="fit-btn" class="map-btn" aria-label="地図の範囲を戻す">⌖</button>
+
+      <div class="controls">
+        <div id="tracking" class="tracking" hidden>
+          <span class="spinner"></span>
+          <div>
+            <b id="tracking-title">5モデルの中心を追跡しています</b>
+            <small id="tracking-detail">実況は表示済みです</small>
+          </div>
+        </div>
+        <div id="control-body">
+          <div class="slider-head">
+            <span>予報時間</span>
+            <b id="lead-label">現在</b>
+            <button id="play-btn" class="play">▶ 再生</button>
+          </div>
+          <input id="slider" type="range" min="0" max="120" step="1" value="0">
+          <div id="ticks" class="ticks"></div>
+          <div id="chips" class="chips"></div>
+        </div>
+      </div>
     </div>
-    <button id="fit-btn" class="map-btn" aria-label="地図の範囲を戻す">⌖</button>
 
-    <!-- 操作部（地図の下端に重ねる） -->
-    <div class="controls">
-      <div id="tracking" class="tracking" hidden>
-        <span class="spinner"></span>
-        <div>
-          <b>5モデルの中心を追跡しています</b>
-          <small id="tracking-detail">実況は表示済みです</small>
-        </div>
-      </div>
-      <div id="control-body">
-        <div class="slider-head">
-          <span>予報時間</span>
-          <b id="lead-label">現在</b>
-          <button id="play-btn" class="play">▶ 再生</button>
-        </div>
-        <input id="slider" type="range" min="0" max="120" step="1" value="0">
-        <div id="ticks" class="ticks"></div>
-        <div id="chips" class="chips"></div>
-      </div>
-    </div>
-  </div>
+    <!-- 畳んだときに見える気圧帯（狭い画面のみ） -->
+    <button id="strip-pressure" class="pressure-strip" hidden></button>
 
-  <!-- 分析パネル -->
-  <button id="handle" class="handle">
-    <i class="grabber"></i>
-    <span id="handle-label">パネルを畳む</span>
-  </button>
-  <div id="panel" class="panel">
-    <section class="card" id="agreement-card">
-      <div class="agree-top">
-        <div class="agree-title"><span>モデル一致度</span><small id="agree-lead">現在</small></div>
-        <div class="agree-value"><b id="agree-percent">—</b><span>%</span></div>
-        <div class="agree-right">
-          <b id="agree-label">—</b>
-          <small id="agree-spread"></small>
-        </div>
-      </div>
-      <div class="bar"><i id="agree-bar"></i></div>
-      <p class="note" id="agree-note">※ 到達確率ではありません。モデルの予測位置のばらつきを表す指標です。</p>
-    </section>
+    <button id="handle" class="handle">
+      <i class="grabber"></i>
+      <span id="handle-label">パネルを畳む</span>
+    </button>
 
-    <section class="card">
-      <div class="card-head"><span>中心気圧</span><small id="pressure-lead">現在</small></div>
-      <div id="pressure-cells" class="cells"></div>
-      <div id="pressure-chart" class="chart"></div>
-      <p class="note">※ 全球モデルは格子が粗いため、中心気圧は実況より浅く出ることがあります。</p>
-    </section>
+    <aside id="panel" class="panel">
+      <section class="card">
+        <div class="agree-top">
+          <div class="agree-title"><span>モデル一致度</span><small id="agree-lead">現在</small></div>
+          <div class="agree-value"><b id="agree-percent">—</b><span>%</span></div>
+          <div class="agree-right">
+            <b id="agree-label">—</b>
+            <small id="agree-spread"></small>
+          </div>
+        </div>
+        <div class="bar"><i id="agree-bar"></i></div>
+        <p class="note" id="agree-note">※ 到達確率ではありません。モデルの予測位置のばらつきを表す指標です。</p>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><span>中心気圧</span><small id="pressure-lead">現在</small></div>
+        <div id="pressure-cells" class="cells"></div>
+        <div id="pressure-chart" class="chart"></div>
+        <p class="note">※ 全球モデルは格子が粗いため、中心気圧は実況より浅く出ることがあります。</p>
+      </section>
+
+      <section class="card" id="ensemble-card">
+        <div class="card-head">
+          <span>アンサンブル予報</span>
+          <button id="ens-pick" class="mini-btn">GEFS ▾</button>
+        </div>
+        <div id="ensemble-body"></div>
+      </section>
+
+      <button id="site-entry" class="row-card">
+        <span class="row-icon">🌀</span>
+        <span class="row-text"><b>地点ごとの風と雨</b><small id="site-sub">街を選んで、各モデルの風と雨を比べます</small></span>
+        <span class="row-chevron">›</span>
+      </button>
+
+      <button id="verify-entry" class="row-card">
+        <span class="row-icon">⏱</span>
+        <span class="row-text"><b>予報の振り返り</b><small id="verify-sub">使うたびに予報を貯めていきます</small></span>
+        <span class="row-chevron">›</span>
+      </button>
+    </aside>
   </div>
 </div>
 
-<!-- 読み込み中 / 失敗 -->
 <div id="splash" class="splash">
   <div class="spinner big"></div>
   <p id="splash-text">データを読み込んでいます</p>
   <button id="retry-btn" class="retry" hidden>もう一度読み込む</button>
 </div>
 
+<!-- 地点ごとの風と雨 -->
+<div id="site-sheet" class="sheet" hidden>
+  <div class="sheet-head">
+    <b>地点ごとの風と雨</b>
+    <button class="close" data-close="site-sheet">閉じる</button>
+  </div>
+  <div class="sheet-body">
+    <div class="site-top">
+      <button id="site-pick" class="pill-btn">📍 <span id="site-name">東京</span> ▾</button>
+      <button id="site-locate" class="pill-btn ghost">現在地</button>
+      <button id="site-search-btn" class="pill-btn ghost">地点を追加</button>
+    </div>
+    <div id="site-search" class="search-box" hidden>
+      <input id="site-query" type="search" placeholder="市区町村や施設の名前" autocomplete="off">
+      <div id="site-results"></div>
+    </div>
+    <div class="seg" id="element-seg"></div>
+    <div id="site-content"></div>
+    <p class="note">※ 進路が近くても、風や雨の出方はモデルでかなり違うことがあります。ここも各モデルの計算結果であり、気象庁の公式予報ではありません。</p>
+  </div>
+</div>
+
+<!-- 予報の振り返り -->
+<div id="verify-sheet" class="sheet" hidden>
+  <div class="sheet-head">
+    <b>予報の振り返り</b>
+    <button class="close" data-close="verify-sheet">閉じる</button>
+  </div>
+  <div class="sheet-body">
+    <section class="card">
+      <p>前に取っておいた予報の位置と、いまの実況の位置がどれだけ離れていたかを出します。</p>
+      <p class="warn">※ 台風1つの、しかも数回ぶんの比較です。モデルの優劣を決めるものではありません。</p>
+    </section>
+    <div id="verify-content"></div>
+  </div>
+</div>
+
 <!-- このアプリについて -->
 <div id="about" class="sheet" hidden>
   <div class="sheet-head">
     <b>アプリについて</b>
-    <button id="about-close" class="close">閉じる</button>
+    <button class="close" data-close="about">閉じる</button>
   </div>
   <div class="sheet-body">
     <section class="card">
@@ -124,13 +182,23 @@
     </section>
     <section class="card">
       <h3>データの出どころ</h3>
-      <p class="sub">台風の実況（現在位置・中心気圧・進行方向）は気象庁が公開している台風情報から取得しています。</p>
+      <p class="sub">台風の実況・経路・公式予報は気象庁が公開している台風情報から取得しています。</p>
       <p class="sub">各モデルの進路は、Open-Meteo が配信する各モデルの海面気圧から、本アプリが気圧の谷を追って推定したものです。各気象機関が公表した公式のモデル進路ではありません。</p>
       <p class="sub">台風が衰えて気圧の谷がはっきりしなくなると、その時点で追跡を終了します。モデルによって進路の長さが違うのはそのためです。</p>
     </section>
     <section class="card">
-      <h3>出典</h3>
-      <p class="sub">気象庁（<a href="https://www.jma.go.jp/" target="_blank" rel="noopener">jma.go.jp</a>）／ Open-Meteo（<a href="https://open-meteo.com/" target="_blank" rel="noopener">open-meteo.com</a>, CC BY 4.0）／ 地図は OpenStreetMap 貢献者・CARTO</p>
+      <h3>アンサンブル予報について</h3>
+      <p class="sub">同じモデルを、初期値や物理過程を少しずつ変えて何十回も走らせたものです。メンバーの散らばりは「同じモデルの中での振れ幅」で、モデル一致度（別々の機関のモデルどうしの食い違い）とは別物です。</p>
+      <p class="sub">通信量が大きいため、押されたときだけ取りに行きます。</p>
+    </section>
+    <section class="card">
+      <h3>予報の振り返りについて</h3>
+      <p class="sub">予報を取るたびに、その予報をこの端末のブラウザ内に残しています。直近24件までで、外には送りません。</p>
+      <button id="clear-archive" class="danger-btn">保存した予報を消す</button>
+    </section>
+    <section class="card">
+      <h3>通知について</h3>
+      <p class="sub">iPhone の Safari では、ページを開いていないあいだに通知を出すことができません。台風の接近を知らせる機能はネイティブ版のみです。</p>
     </section>
     <section class="card">
       <h3>気象庁の公式情報</h3>
@@ -138,7 +206,11 @@
       <a class="link-btn" href="https://www.jma.go.jp/bosai/map.html#contents=typhoon" target="_blank" rel="noopener">気象庁の台風情報を開く</a>
     </section>
     <section class="card">
-      <h3 id="models-head">対応している数値予報モデル</h3>
+      <h3>出典</h3>
+      <p class="sub">気象庁（<a href="https://www.jma.go.jp/" target="_blank" rel="noopener">jma.go.jp</a>）／ Open-Meteo（<a href="https://open-meteo.com/" target="_blank" rel="noopener">open-meteo.com</a>, CC BY 4.0）／ 地図は Esri・OpenStreetMap 貢献者</p>
+    </section>
+    <section class="card">
+      <h3>対応している数値予報モデル</h3>
       <div id="model-list"></div>
     </section>
   </div>
